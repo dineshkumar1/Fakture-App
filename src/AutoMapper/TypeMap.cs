@@ -45,7 +45,6 @@ namespace AutoMapper
         public TypePair Types { get; }
 
         public ConstructorMap ConstructorMap { get; set; }
-        public bool CanResolveCtor => ConstructorMap?.CanResolve == true;
 
         public TypeDetails SourceTypeDetails { get; }
         public TypeDetails DestinationTypeDetails { get; }

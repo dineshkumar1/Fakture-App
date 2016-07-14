@@ -132,7 +132,7 @@ namespace AutoMapper.Execution
                     continue;
                 }
                 var property = TryPropertyMap(propertyMap);
-                if(_typeMap.CanResolveCtor && _typeMap.ConstructorParameterMatches(propertyMap.DestinationProperty.Name))
+                if(_typeMap.ConstructorMap?.CanResolve == true && _typeMap.ConstructorParameterMatches(propertyMap.DestinationProperty.Name))
                 {
                     property = IfThen(NotEqual(_initialDestination, Constant(null)), property);
                 }
