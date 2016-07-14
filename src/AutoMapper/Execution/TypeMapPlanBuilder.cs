@@ -18,13 +18,13 @@ namespace AutoMapper.Execution
         private static readonly Expression<Action<ResolutionContext>> DecTypeDepthInfo = ctxt => ctxt.DecrementTypeDepth(default(TypePair));
         private static readonly Expression<Func<ResolutionContext, int>> GetTypeDepthInfo = ctxt => ctxt.GetTypeDepth(default(TypePair));
 
-        readonly IConfigurationProvider _configurationProvider;
-        readonly TypeMap _typeMap;
-        readonly TypeMapRegistry _typeMapRegistry;
-        readonly ParameterExpression _source;
-        readonly ParameterExpression _initialDestination;
-        readonly ParameterExpression _context;
-        readonly ParameterExpression _destination;
+        private readonly IConfigurationProvider _configurationProvider;
+        private readonly TypeMap _typeMap;
+        private readonly TypeMapRegistry _typeMapRegistry;
+        private readonly ParameterExpression _source;
+        private readonly ParameterExpression _initialDestination;
+        private readonly ParameterExpression _context;
+        private readonly ParameterExpression _destination;
 
         public TypeMapPlanBuilder(IConfigurationProvider configurationProvider, TypeMapRegistry typeMapRegistry, TypeMap typeMap)
         {
@@ -89,20 +89,18 @@ namespace AutoMapper.Execution
                 return Lambda(_typeMap.CustomProjection.ReplaceParameters(_source), _source, _initialDestination, _context);
             }
 
-            bool constructorMapping;
+            var destinationFunc = CreateDestinationFunc();
 
-            var destinationFunc = CreateDestinationFunc(out constructorMapping);
-
-            var assignmentFunc = CreateAssignmentFunc(destinationFunc, constructorMapping);
+            var assignmentFunc = CreateAssignmentFunc(destinationFunc);
 
             var mapperFunc = CreateMapperFunc(assignmentFunc);
 
             return Lambda(Block(new[] { _destination }, mapperFunc), _source, _initialDestination, _context);
         }
 
-        private Expression CreateDestinationFunc(out bool constructorMapping)
+        private Expression CreateDestinationFunc()
         {
-            var newDestFunc = ToType(CreateNewDestinationFunc(out constructorMapping), _typeMap.DestinationTypeToUse);
+            var newDestFunc = ToType(CreateNewDestinationFunc(), _typeMap.DestinationTypeToUse);
 
             var getDest = _typeMap.DestinationTypeToUse.GetTypeInfo().IsValueType
                 ? newDestFunc
@@ -124,7 +122,7 @@ namespace AutoMapper.Execution
             return destinationFunc;
         }
 
-        private Expression CreateAssignmentFunc(Expression destinationFunc, bool constructorMapping)
+        private Expression CreateAssignmentFunc(Expression destinationFunc)
         {
             var actions = new List<Expression>();
             foreach(var propertyMap in _typeMap.GetPropertyMaps())
@@ -134,7 +132,7 @@ namespace AutoMapper.Execution
                     continue;
                 }
                 var property = TryPropertyMap(propertyMap);
-                if(constructorMapping && _typeMap.ConstructorParameterMatches(propertyMap.DestinationProperty.Name))
+                if(_typeMap.CanResolveCtor && _typeMap.ConstructorParameterMatches(propertyMap.DestinationProperty.Name))
                 {
                     property = IfThen(NotEqual(_initialDestination, Constant(null)), property);
                 }
@@ -217,9 +215,8 @@ namespace AutoMapper.Execution
             return mapperFunc;
         }
 
-        private Expression CreateNewDestinationFunc(out bool constructorMapping)
+        private Expression CreateNewDestinationFunc()
         {
-            constructorMapping = false;
             if(_typeMap.DestinationCtor != null)
                 return _typeMap.DestinationCtor.ReplaceParameters(_source, _context);
 
@@ -231,7 +228,6 @@ namespace AutoMapper.Execution
 
             if(_typeMap.ConstructorMap?.CanResolve == true)
             {
-                constructorMapping = true;
                 return _typeMap.ConstructorMap.BuildExpression(_typeMapRegistry, _source, _context);
             }
 #if NET45
